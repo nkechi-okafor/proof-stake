@@ -96,3 +96,104 @@
     accumulated-rewards: uint,
   }
 )
+
+;; Tier level configuration and benefits
+(define-map TierLevels
+  uint
+  {
+    minimum-stake: uint,
+    reward-multiplier: uint,
+    features-enabled: (list 10 bool),
+  }
+)
+
+;; INTERNAL UTILITY FUNCTIONS
+
+;; Calculate user tier based on stake amount and commitment
+(define-private (get-tier-info (stake-amount uint))
+  (if (>= stake-amount u10000000)
+    {
+      tier-level: u3,
+      reward-multiplier: u200,
+    } ;; Platinum: 10M+ STX
+    (if (>= stake-amount u5000000)
+      {
+        tier-level: u2,
+        reward-multiplier: u150,
+      } ;; Gold: 5M+ STX
+      {
+        tier-level: u1,
+        reward-multiplier: u100,
+      } ;; Silver: 1M+ STX
+    )
+  )
+)
+
+;; Determine reward multiplier based on lock duration
+(define-private (calculate-lock-multiplier (lock-period uint))
+  (if (>= lock-period u8640) ;; 60-day commitment
+    u150 ;; 1.5x multiplier
+    (if (>= lock-period u4320) ;; 30-day commitment
+      u125 ;; 1.25x multiplier
+      u100 ;; No lock commitment
+    )
+  )
+)
+
+;; Advanced reward calculation with compounding factors
+(define-private (calculate-rewards
+    (user principal)
+    (blocks uint)
+  )
+  (let (
+      (staking-position (unwrap! (map-get? StakingPositions user) u0))
+      (user-position (unwrap! (map-get? UserPositions user) u0))
+      (stake-amount (get amount staking-position))
+      (base-rate (var-get base-reward-rate))
+      (multiplier (get rewards-multiplier user-position))
+    )
+    ;; Formula: (stake * rate * multiplier * blocks) / (100 * blocks-per-year)
+    (/ (* (* (* stake-amount base-rate) multiplier) blocks) u14400000)
+  )
+)
+
+;; Validate proposal description quality
+(define-private (is-valid-description (desc (string-utf8 256)))
+  (and
+    (>= (len desc) u10) ;; Minimum meaningful description
+    (<= (len desc) u256) ;; Maximum storage efficiency
+  )
+)
+
+;; Validate lock period options
+(define-private (is-valid-lock-period (lock-period uint))
+  (or
+    (is-eq lock-period u0) ;; Flexible (no lock)
+    (is-eq lock-period u4320) ;; 30-day commitment
+    (is-eq lock-period u8640) ;; 60-day commitment
+  )
+)
+
+;; Validate governance voting period
+(define-private (is-valid-voting-period (period uint))
+  (and
+    (>= period u100) ;; Minimum deliberation time
+    (<= period u2880) ;; Maximum voting window (~20 hours)
+  )
+)
+
+;; PROTOCOL INITIALIZATION
+
+;; Initialize protocol with tier configurations
+(define-public (initialize-contract)
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+
+    ;; Configure Silver Tier (Entry Level)
+    (map-set TierLevels u1 {
+      minimum-stake: u1000000, ;; 1M STX threshold
+      reward-multiplier: u100, ;; 1x base rewards
+      features-enabled: (list true false false false false false false false false false),
+    })
+
+    ;; Configure Gold Tier (Premium)
