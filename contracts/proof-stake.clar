@@ -384,3 +384,60 @@
     (ok true)
   )
 )
+
+;; ADMINISTRATIVE CONTROLS
+
+;; Emergency pause for protocol security
+(define-public (pause-contract)
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+    (var-set contract-paused true)
+    (ok true)
+  )
+)
+
+;; Resume normal protocol operations
+(define-public (resume-contract)
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+    (var-set contract-paused false)
+    (ok true)
+  )
+)
+
+;; PUBLIC VIEW FUNCTIONS
+
+;; Get protocol owner address
+(define-read-only (get-contract-owner)
+  (ok CONTRACT-OWNER)
+)
+
+;; Get current total value locked
+(define-read-only (get-stx-pool)
+  (ok (var-get stx-pool))
+)
+
+;; Get total governance proposals created
+(define-read-only (get-proposal-count)
+  (ok (var-get proposal-count))
+)
+
+;; Get user's complete position information
+(define-read-only (get-user-position (user principal))
+  (ok (map-get? UserPositions user))
+)
+
+;; Get user's staking details
+(define-read-only (get-staking-position (user principal))
+  (ok (map-get? StakingPositions user))
+)
+
+;; Get proposal details by ID
+(define-read-only (get-proposal-details (proposal-id uint))
+  (ok (map-get? Proposals { proposal-id: proposal-id }))
+)
+
+;; Check if contract is currently paused
+(define-read-only (is-contract-paused)
+  (ok (var-get contract-paused))
+)
